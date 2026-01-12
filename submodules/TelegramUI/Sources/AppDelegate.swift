@@ -356,6 +356,47 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         self.nativeWindow = window
         
         hostView.containerView.layer.addSublayer(MetalEngine.shared.rootLayer)
+
+        if BackendConfig.isEnabled {
+            let presentationData = defaultPresentationData()
+            let navigationController = NavigationController(
+                mode: .single,
+                theme: NavigationControllerTheme(presentationTheme: presentationData.theme)
+            )
+
+            func makeChatListController() -> BackendChatListController {
+                let controller = BackendChatListController(presentationData: presentationData)
+                controller.onLogout = { [weak navigationController] in
+                    BackendSession.shared.clear()
+                    let loginController = BackendLoginController(presentationData: presentationData)
+                    loginController.onAuthorized = { [weak navigationController] in
+                        guard let navigationController else { return }
+                        let chatList = makeChatListController()
+                        navigationController.setViewControllers([chatList], animated: true)
+                    }
+                    navigationController?.setViewControllers([loginController], animated: true)
+                }
+                return controller
+            }
+
+            let rootController: ViewController
+            if BackendSession.shared.isAuthorized {
+                rootController = makeChatListController()
+            } else {
+                let loginController = BackendLoginController(presentationData: presentationData)
+                loginController.onAuthorized = { [weak navigationController] in
+                    guard let navigationController else { return }
+                    let chatList = makeChatListController()
+                    navigationController.setViewControllers([chatList], animated: true)
+                }
+                rootController = loginController
+            }
+
+            navigationController.setViewControllers([rootController], animated: false)
+            self.mainWindow.viewController = navigationController
+            window.makeKeyAndVisible()
+            return true
+        }
         
         if !UIDevice.current.isBatteryMonitoringEnabled {
             UIDevice.current.isBatteryMonitoringEnabled = true
