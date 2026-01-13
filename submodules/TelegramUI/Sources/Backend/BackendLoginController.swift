@@ -3,23 +3,15 @@ import Display
 import TelegramPresentationData
 
 final class BackendLoginController: ViewController {
-    private enum State {
-        case phone
-        case code(phone: String)
-    }
-
     private let presentationData: PresentationData
     private let api: BackendAPI
     private let session: BackendSession
 
     private let stackView = UIStackView()
-    private let phoneField = UITextField()
     private let codeField = UITextField()
     private let nameField = UITextField()
     private let actionButton = UIButton(type: .system)
     private let errorLabel = UILabel()
-
-    private var state: State = .phone
 
     var onAuthorized: (() -> Void)?
 
@@ -45,11 +37,10 @@ final class BackendLoginController: ViewController {
         stackView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(stackView)
 
-        configureTextField(phoneField, placeholder: "+79990001122", keyboard: .phonePad)
-        configureTextField(codeField, placeholder: "000000", keyboard: .numberPad)
+        configureTextField(codeField, placeholder: "Bot code", keyboard: .numberPad)
         configureTextField(nameField, placeholder: "Name", keyboard: .default)
 
-        actionButton.setTitle("Send Code", for: .normal)
+        actionButton.setTitle("Authorize", for: .normal)
         actionButton.titleLabel?.font = Font.medium(17)
         actionButton.tintColor = presentationData.theme.rootController.navigationBar.accentTextColor
         actionButton.addTarget(self, action: #selector(actionTapped), for: .touchUpInside)
@@ -59,7 +50,6 @@ final class BackendLoginController: ViewController {
         errorLabel.numberOfLines = 0
         errorLabel.isHidden = true
 
-        stackView.addArrangedSubview(phoneField)
         stackView.addArrangedSubview(codeField)
         stackView.addArrangedSubview(nameField)
         stackView.addArrangedSubview(actionButton)
@@ -70,8 +60,6 @@ final class BackendLoginController: ViewController {
             stackView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
             stackView.centerYAnchor.constraint(equalTo: view.centerYAnchor)
         ])
-
-        updateState(.phone)
     }
 
     private func configureTextField(_ field: UITextField, placeholder: String, keyboard: UIKeyboardType) {
@@ -85,61 +73,25 @@ final class BackendLoginController: ViewController {
         field.textColor = presentationData.theme.list.itemPrimaryTextColor
     }
 
-    private func updateState(_ state: State) {
-        self.state = state
-        errorLabel.isHidden = true
-
-        switch state {
-        case .phone:
-            codeField.isHidden = true
-            nameField.isHidden = true
-            phoneField.isHidden = false
-            actionButton.setTitle("Send Code", for: .normal)
-        case .code:
-            codeField.isHidden = false
-            nameField.isHidden = false
-            phoneField.isHidden = false
-            actionButton.setTitle("Verify", for: .normal)
-        }
-    }
-
     @objc private func actionTapped() {
         errorLabel.isHidden = true
         actionButton.isEnabled = false
 
-        switch state {
-        case .phone:
-            let phone = phoneField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            guard !phone.isEmpty else {
-                showError("Phone required")
-                return
+        let code = codeField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let name = nameField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !code.isEmpty else {
+            showError("Code required")
+            return
+        }
+        Task { @MainActor in
+            do {
+                let auth = try await api.authorizeBot(code: code, name: name)
+                session.update(from: auth)
+                onAuthorized?()
+            } catch {
+                showError("Failed to authorize")
             }
-            Task { @MainActor in
-                do {
-                    try await api.requestAuthCode(phone: phone)
-                    updateState(.code(phone: phone))
-                } catch {
-                    showError("Failed to send code")
-                }
-                actionButton.isEnabled = true
-            }
-        case let .code(phone):
-            let code = codeField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            let name = nameField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            guard !code.isEmpty else {
-                showError("Code required")
-                return
-            }
-            Task { @MainActor in
-                do {
-                    let auth = try await api.verifyCode(phone: phone, code: code, name: name)
-                    session.update(from: auth)
-                    onAuthorized?()
-                } catch {
-                    showError("Failed to verify code")
-                }
-                actionButton.isEnabled = true
-            }
+            actionButton.isEnabled = true
         }
     }
 

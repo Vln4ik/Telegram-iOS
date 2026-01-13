@@ -33,6 +33,12 @@ final class BackendAPI {
         return try await perform(request, as: BackendAuthResponse.self)
     }
 
+    func authorizeBot(code: String, name: String) async throws -> BackendAuthResponse {
+        let body = ["code": code, "name": name]
+        let request = try makeRequest(path: "/v1/auth/bot", method: "POST", body: body, authorized: false)
+        return try await perform(request, as: BackendAuthResponse.self)
+    }
+
     func fetchMe() async throws -> BackendUser {
         let request = try makeRequest(path: "/v1/me", method: "GET", body: nil, authorized: true)
         return try await perform(request, as: BackendUser.self)
@@ -70,8 +76,8 @@ final class BackendAPI {
         return try await perform(request, as: BackendMessage.self)
     }
 
-    func createCall(chatId: String) async throws -> BackendCallJoin {
-        let payload = ["chat_id": chatId]
+    func createCall(chatId: String? = nil) async throws -> BackendCallJoin {
+        let payload = BackendCreateCallPayload(chatId: chatId?.isEmpty == true ? nil : chatId)
         let request = try makeRequest(path: "/v1/calls", method: "POST", body: payload, authorized: true)
         return try await perform(request, as: BackendCallJoin.self)
     }
@@ -97,6 +103,19 @@ final class BackendAPI {
         return request
     }
 
+    private func makeRequest<T: Encodable>(path: String, method: String, body: T, authorized: Bool) throws -> URLRequest {
+        let cleanPath = path.hasPrefix("/") ? String(path.dropFirst()) : path
+        let url = BackendConfig.baseURL.appendingPathComponent(cleanPath)
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if authorized {
+            addAuthorizationIfNeeded(&request)
+        }
+        request.httpBody = try encoder.encode(body)
+        return request
+    }
+
     private func addAuthorizationIfNeeded(_ request: inout URLRequest) {
         if let token = tokenStore.token {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -118,4 +137,12 @@ final class BackendAPI {
 
 private struct BackendSentResponse: Codable {
     let sent: Bool
+}
+
+private struct BackendCreateCallPayload: Codable {
+    let chatId: String?
+
+    enum CodingKeys: String, CodingKey {
+        case chatId = "chat_id"
+    }
 }

@@ -8,8 +8,8 @@ import SwiftSignalKit
 import TelegramPresentationData
 import AccountContext
 import ContactListUI
-import CallListUI
 import ChatListUI
+import CallListUI
 import SettingsUI
 import AppBundle
 import DatePickerNode
@@ -76,7 +76,8 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     public var rootTabController: TabBarController?
     
     public var contactsController: ContactsController?
-    public var callListController: CallListController?
+    public var callListController: ViewController?
+    public var minigramCallsController: ViewController?
     public var chatListController: ChatListController?
     public var accountSettingsController: PeerInfoScreen?
     
@@ -194,6 +195,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
             chatListController.tabBarItem.badgeValue = sharedContext.switchingData.chatListBadge
         }
         let callListController = CallListController(context: self.context, mode: .tab)
+        let minigramCallsController = MinigramCallsPlaceholderController(context: self.context)
         
         var controllers: [ViewController] = []
         
@@ -206,6 +208,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         if showCallsTab {
             controllers.append(callListController)
         }
+        controllers.append(minigramCallsController)
         controllers.append(chatListController)
         
         var restoreSettignsController: (ViewController & SettingsController)?
@@ -231,6 +234,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         
         self.contactsController = contactsController
         self.callListController = callListController
+        self.minigramCallsController = minigramCallsController
         self.chatListController = chatListController
         self.accountSettingsController = accountSettingsController
         self.rootTabController = tabBarController
@@ -245,6 +249,9 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         controllers.append(self.contactsController!)
         if showCallsTab {
             controllers.append(self.callListController!)
+        }
+        if let minigramCallsController = self.minigramCallsController {
+            controllers.append(minigramCallsController)
         }
         controllers.append(self.chatListController!)
         controllers.append(self.accountSettingsController!)

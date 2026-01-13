@@ -23,7 +23,7 @@ enum BackendConfig {
         if UserDefaults.standard.object(forKey: enabledKey) != nil {
             return UserDefaults.standard.bool(forKey: enabledKey)
         }
-        return true
+        return false
     }
 
     static func updateBaseURL(_ url: URL) {
